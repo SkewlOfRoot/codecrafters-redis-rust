@@ -14,37 +14,34 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let requests = read_request(&mut stream).unwrap();
-    println!("REQUEST:\r\n{:#?}", requests);
-
-    for _ in requests {
-        write_response(&stream);
-    }
+    handle_request(&mut stream).unwrap();
 }
 
-fn read_request(stream: &mut TcpStream) -> Result<Vec<String>, String> {
+fn handle_request(stream: &mut TcpStream) -> Result<(), String> {
     let mut read_buff = [0; 1024];
-    match stream.read(&mut read_buff) {
-        Ok(bytes_read) => {
-            if let Ok(request) = String::from_utf8(read_buff[..bytes_read].to_vec()) {
-                println!("Incomming request string: {:#?}", request);
-                let split = request.split('\n');
-                let requests = split
-                    .into_iter()
-                    .filter(|x| x.contains("PING"))
-                    .map(|x| x.to_string())
-                    .collect();
-                Ok(requests)
-            } else {
-                Err(String::from("Received non-UTF8 data."))
-            }
+
+    loop {
+        let bytes_read = stream.read(&mut read_buff).unwrap();
+
+        if bytes_read == 0 {
+            break;
         }
-        Err(e) => Err(format!("Failed to read bytes from stream: {}", e)),
+        if let Ok(request) = String::from_utf8(read_buff[..bytes_read].to_vec()) {
+            println!("Incomming request string: {:#?}", request);
+
+            if request.contains("PING") {
+                write_response(stream);
+            }
+        } else {
+            return Err(String::from("Received non-UTF8 data."));
+        }
     }
+
+    Ok(())
 }
 
 fn write_response(mut stream: &TcpStream) {
     let response_text = "+PONG\r\n";
-    println!("RESPONSE: {}", response_text);
+    println!("RESPONSE: {:#?}", response_text);
     stream.write_all(response_text.as_bytes()).unwrap()
 }
