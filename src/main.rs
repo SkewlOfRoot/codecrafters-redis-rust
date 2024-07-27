@@ -27,7 +27,7 @@ fn read_request(stream: &mut TcpStream) -> Result<Vec<String>, String> {
     match stream.read(&mut read_buff) {
         Ok(bytes_read) => {
             if let Ok(request) = String::from_utf8(read_buff[..bytes_read].to_vec()) {
-                println!("Incomming request string: {}", request);
+                println!("Incomming request string: {:#?}", request);
                 let split = request.split('\n');
                 let requests = split
                     .into_iter()
