@@ -29,7 +29,11 @@ fn read_request(stream: &mut TcpStream) -> Result<Vec<String>, String> {
             if let Ok(request) = String::from_utf8(read_buff[..bytes_read].to_vec()) {
                 println!("Incomming request string: {}", request);
                 let split = request.split('\n');
-                let requests = split.into_iter().map(|x| x.to_string()).collect();
+                let requests = split
+                    .into_iter()
+                    .filter(|x| x.contains("PING"))
+                    .map(|x| x.to_string())
+                    .collect();
                 Ok(requests)
             } else {
                 Err(String::from("Received non-UTF8 data."))
