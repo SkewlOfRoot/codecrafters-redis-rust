@@ -49,14 +49,14 @@ fn handle_request(stream: &mut TcpStream) -> Result<(), String> {
 fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
     println!("Incomming request string: {:#?}", protocol_str);
     let proto_elements: Vec<&str> = protocol_str.split("\r\n").collect();
-    match proto_elements.get(1) {
+    match proto_elements.get(2) {
         Some(val) => {
             let val = val.to_lowercase();
             let command_str = val.as_str();
             match command_str {
                 "ping" => Ok(Command::Ping),
                 "echo" => {
-                    let message = proto_elements.get(2).expect("Could not get ECHO message.");
+                    let message = proto_elements.get(4).expect("Could not get ECHO message.");
                     Ok(Command::Echo(EchoCommand::new(message)))
                 }
                 _ => Err("Command not recognized."),
