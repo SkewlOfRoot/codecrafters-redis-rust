@@ -163,7 +163,7 @@ fn echo(stream: &TcpStream, cmd: EchoCommand) {
 
 fn set(session: &mut Session, cmd: SetCommand) {
     println!("SET key: {} val: {}", cmd.key, cmd.value);
-    session.storage.insert(cmd.key, cmd.value).unwrap();
+    session.storage.insert(cmd.key, cmd.value);
     write_response(&session.stream, "+OK\r\n");
 }
 
