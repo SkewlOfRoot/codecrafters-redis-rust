@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Read;
 use std::{
     io::Write,
@@ -13,19 +14,21 @@ fn main() {
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        pool.execute(|| handle_connection(stream));
+        let session = Session::new(stream);
+        pool.execute(|| handle_connection(session));
     }
 }
 
-fn handle_connection(mut stream: TcpStream) {
-    handle_request(&mut stream).unwrap();
+fn handle_connection(mut session: Session) {
+    handle_request(&mut session).unwrap();
 }
 
-fn handle_request(stream: &mut TcpStream) -> Result<(), String> {
+fn handle_request(session: &mut Session) -> Result<(), String> {
     let mut read_buff = [0; 1024];
+    let mut command_handler = CommandHandler;
 
     loop {
-        let bytes_read = stream.read(&mut read_buff).unwrap();
+        let bytes_read = session.stream.read(&mut read_buff).unwrap();
 
         if bytes_read == 0 {
             break;
@@ -35,7 +38,7 @@ fn handle_request(stream: &mut TcpStream) -> Result<(), String> {
             let command = parse_protocol(&request);
 
             match command {
-                Ok(c) => handle_response(stream, c),
+                Ok(cmd) => command_handler.handle(session, cmd).unwrap(),
                 Err(e) => println!("{}", e),
             }
         } else {
@@ -59,6 +62,15 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
                     let message = proto_elements.get(4).expect("Could not get ECHO message.");
                     Ok(Command::Echo(EchoCommand::new(message)))
                 }
+                "set" => {
+                    let key = proto_elements.get(4).expect("Could not get SET key.");
+                    let value = proto_elements.get(6).expect("Could not get SET value.");
+                    Ok(Command::Set(SetCommand::new(key, value)))
+                }
+                "get" => {
+                    let key = proto_elements.get(4).expect("Could not get GET key.");
+                    Ok(Command::Get(GetCommand::new(key)))
+                }
                 _ => Err("Command not recognized."),
             }
         }
@@ -66,28 +78,24 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
     }
 }
 
-fn handle_response(stream: &mut TcpStream, command: Command) {
-    match command {
-        Command::Ping => write_response(stream, "+PONG\r\n"),
-        Command::Echo(cmd) => {
-            let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
-            write_response(stream, &res);
-        }
-    }
-}
-
-fn write_response(mut stream: &TcpStream, response_str: &str) {
-    println!("RESPONSE: {:#?}", response_str);
-    stream.write_all(response_str.as_bytes()).unwrap()
-}
-
 struct EchoCommand {
     message: String,
+}
+
+struct SetCommand {
+    key: String,
+    value: String,
+}
+
+struct GetCommand {
+    key: String,
 }
 
 enum Command {
     Ping,
     Echo(EchoCommand),
+    Set(SetCommand),
+    Get(GetCommand),
 }
 
 impl EchoCommand {
@@ -96,4 +104,82 @@ impl EchoCommand {
             message: message.to_string(),
         }
     }
+}
+
+impl SetCommand {
+    fn new(key: &str, value: &str) -> Self {
+        SetCommand {
+            key: key.to_string(),
+            value: value.to_string(),
+        }
+    }
+}
+
+impl GetCommand {
+    fn new(key: &str) -> Self {
+        GetCommand {
+            key: key.to_string(),
+        }
+    }
+}
+
+struct Session {
+    stream: TcpStream,
+    storage: HashMap<String, String>,
+}
+
+impl Session {
+    fn new(stream: TcpStream) -> Self {
+        Session {
+            stream,
+            storage: HashMap::new(),
+        }
+    }
+}
+
+struct CommandHandler;
+
+impl CommandHandler {
+    fn handle(&mut self, session: &mut Session, command: Command) -> Result<(), &'static str> {
+        match command {
+            Command::Ping => write_response(&session.stream, "+PONG\r\n"),
+            Command::Echo(cmd) => {
+                echo(&session.stream, cmd)
+                // let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
+                // write_response(stream, &res);
+            }
+            Command::Set(cmd) => set(session, cmd),
+            Command::Get(cmd) => get(session, cmd),
+        }
+
+        Ok(())
+    }
+}
+
+fn echo(stream: &TcpStream, cmd: EchoCommand) {
+    let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
+    write_response(stream, &res);
+}
+
+fn set(session: &mut Session, cmd: SetCommand) {
+    println!("SET key: {} val: {}", cmd.key, cmd.value);
+    session.storage.insert(cmd.key, cmd.value).unwrap();
+    write_response(&session.stream, "+OK\r\n");
+}
+
+fn get(session: &mut Session, cmd: GetCommand) {
+    println!("GET key: {}", cmd.key);
+    if let Some(val) = session.storage.get(&cmd.key) {
+        write_response(
+            &session.stream,
+            format!("${}\r\n{}\r\n", val.len(), val).as_str(),
+        );
+    } else {
+        write_response(&session.stream, "$-1\r\n");
+    }
+}
+
+fn write_response(mut stream: &TcpStream, response_str: &str) {
+    println!("RESPONSE: {:#?}", response_str);
+    stream.write_all(response_str.as_bytes()).unwrap()
 }
