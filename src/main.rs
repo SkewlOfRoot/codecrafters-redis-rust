@@ -38,7 +38,7 @@ fn handle_request(session: &mut Session) -> Result<(), String> {
             let command = parse_protocol(&request);
 
             match command {
-                Ok(cmd) => command_handler.handle(session, cmd).unwrap(),
+                Ok(cmd) => command_handler.handle(session, cmd),
                 Err(e) => println!("{}", e),
             }
         } else {
@@ -54,20 +54,20 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
     let proto_elements: Vec<&str> = protocol_str.split("\r\n").collect();
     match proto_elements.get(2) {
         Some(val) => {
-            let val = val.to_lowercase();
+            let val = val.to_uppercase();
             let command_str = val.as_str();
             match command_str {
-                "ping" => Ok(Command::Ping),
-                "echo" => {
+                "PING" => Ok(Command::Ping),
+                "ECHO" => {
                     let message = proto_elements.get(4).expect("Could not get ECHO message.");
                     Ok(Command::Echo(EchoCommand::new(message)))
                 }
-                "set" => {
+                "SET" => {
                     let key = proto_elements.get(4).expect("Could not get SET key.");
                     let value = proto_elements.get(6).expect("Could not get SET value.");
                     Ok(Command::Set(SetCommand::new(key, value)))
                 }
-                "get" => {
+                "GET" => {
                     let key = proto_elements.get(4).expect("Could not get GET key.");
                     Ok(Command::Get(GetCommand::new(key)))
                 }
@@ -140,35 +140,31 @@ impl Session {
 struct CommandHandler;
 
 impl CommandHandler {
-    fn handle(&mut self, session: &mut Session, command: Command) -> Result<(), &'static str> {
+    fn handle(&mut self, session: &mut Session, command: Command) {
         match command {
-            Command::Ping => write_response(&session.stream, "+PONG\r\n"),
-            Command::Echo(cmd) => {
-                echo(&session.stream, cmd)
-                // let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
-                // write_response(stream, &res);
-            }
+            Command::Ping => ping(session),
+            Command::Echo(cmd) => echo(session, cmd),
             Command::Set(cmd) => set(session, cmd),
             Command::Get(cmd) => get(session, cmd),
         }
-
-        Ok(())
     }
 }
 
-fn echo(stream: &TcpStream, cmd: EchoCommand) {
+fn ping(session: &Session) {
+    write_response(&session.stream, "+PONG\r\n");
+}
+
+fn echo(session: &Session, cmd: EchoCommand) {
     let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
-    write_response(stream, &res);
+    write_response(&session.stream, &res);
 }
 
 fn set(session: &mut Session, cmd: SetCommand) {
-    println!("SET key: {} val: {}", cmd.key, cmd.value);
     session.storage.insert(cmd.key, cmd.value);
     write_response(&session.stream, "+OK\r\n");
 }
 
 fn get(session: &mut Session, cmd: GetCommand) {
-    println!("GET key: {}", cmd.key);
     if let Some(val) = session.storage.get(&cmd.key) {
         write_response(
             &session.stream,
