@@ -149,7 +149,7 @@ impl CacheValue {
     }
 
     fn is_expired(&self) -> bool {
-        self.expiry_dt > Utc::now()
+        self.expiry_dt < Utc::now()
     }
 }
 
