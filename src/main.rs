@@ -66,7 +66,16 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
                 "SET" => {
                     let key = proto_elements.get(4).expect("Could not get SET key.");
                     let value = proto_elements.get(6).expect("Could not get SET value.");
-                    Ok(Command::Set(SetCommand::new(key, value, None)))
+                    let mut px: Option<i64> = None;
+                    let px_opt = proto_elements.get(8);
+
+                    // Get PX if it's there.
+                    if px_opt.is_some_and(|x| x.to_uppercase() == "PX") {
+                        let px_val = proto_elements.get(10).unwrap();
+                        let px_val = px_val.parse::<i64>().unwrap();
+                        px = Some(px_val);
+                    }
+                    Ok(Command::Set(SetCommand::new(key, value, px)))
                 }
                 "GET" => {
                     let key = proto_elements.get(4).expect("Could not get GET key.");
