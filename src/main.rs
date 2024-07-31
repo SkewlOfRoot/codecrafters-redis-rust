@@ -1,3 +1,4 @@
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::io::Read;
 use std::{
@@ -65,7 +66,7 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
                 "SET" => {
                     let key = proto_elements.get(4).expect("Could not get SET key.");
                     let value = proto_elements.get(6).expect("Could not get SET value.");
-                    Ok(Command::Set(SetCommand::new(key, value)))
+                    Ok(Command::Set(SetCommand::new(key, value, None)))
                 }
                 "GET" => {
                     let key = proto_elements.get(4).expect("Could not get GET key.");
@@ -85,6 +86,7 @@ struct EchoCommand {
 struct SetCommand {
     key: String,
     value: String,
+    px: Option<i64>,
 }
 
 struct GetCommand {
@@ -107,10 +109,11 @@ impl EchoCommand {
 }
 
 impl SetCommand {
-    fn new(key: &str, value: &str) -> Self {
+    fn new(key: &str, value: &str, px: Option<i64>) -> Self {
         SetCommand {
             key: key.to_string(),
             value: value.to_string(),
+            px,
         }
     }
 }
@@ -123,9 +126,27 @@ impl GetCommand {
     }
 }
 
+struct CacheValue {
+    value: String,
+    expiry_dt: DateTime<Utc>,
+}
+
+impl CacheValue {
+    fn new(value: &str, expiry_ms: Option<i64>) -> Self {
+        CacheValue {
+            value: value.to_string(),
+            expiry_dt: Utc::now() + Duration::milliseconds(expiry_ms.unwrap_or(i64::MAX)),
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        self.expiry_dt > Utc::now()
+    }
+}
+
 struct Session {
     stream: TcpStream,
-    storage: HashMap<String, String>,
+    storage: HashMap<String, CacheValue>,
 }
 
 impl Session {
@@ -160,15 +181,20 @@ fn echo(session: &Session, cmd: EchoCommand) {
 }
 
 fn set(session: &mut Session, cmd: SetCommand) {
-    session.storage.insert(cmd.key, cmd.value);
+    session
+        .storage
+        .insert(cmd.key, CacheValue::new(cmd.value.as_str(), cmd.px));
     write_response(&session.stream, "+OK\r\n");
 }
 
 fn get(session: &mut Session, cmd: GetCommand) {
-    if let Some(val) = session.storage.get(&cmd.key) {
+    let cv = session.storage.get(&cmd.key);
+
+    if cv.is_some_and(|x| !x.is_expired()) {
+        let cv = cv.unwrap();
         write_response(
             &session.stream,
-            format!("${}\r\n{}\r\n", val.len(), val).as_str(),
+            format!("${}\r\n{}\r\n", cv.value.len(), cv.value).as_str(),
         );
     } else {
         write_response(&session.stream, "$-1\r\n");
