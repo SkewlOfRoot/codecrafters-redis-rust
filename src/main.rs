@@ -142,9 +142,11 @@ struct CacheValue {
 
 impl CacheValue {
     fn new(value: &str, expiry_ms: Option<i64>) -> Self {
+        let milliseconds = expiry_ms.unwrap_or(i64::MAX);
+        println!("ms {}", milliseconds);
         CacheValue {
             value: value.to_string(),
-            expiry_dt: Utc::now() + Duration::milliseconds(expiry_ms.unwrap_or(i64::MAX)),
+            expiry_dt: Utc::now() + Duration::milliseconds(milliseconds),
         }
     }
 
