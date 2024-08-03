@@ -235,7 +235,6 @@ fn info(session: &Session, cmd: InfoCommand) {
     match cmd.section {
         Section::Custom(section) => {
             if section == "replication" {
-                infos.push(String::from("# Replication"));
                 infos.extend(replication_info());
             }
         }
