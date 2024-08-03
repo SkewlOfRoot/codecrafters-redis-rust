@@ -229,8 +229,6 @@ fn echo(session: &Session, cmd: EchoCommand) {
 }
 
 fn info(session: &Session, cmd: InfoCommand) {
-    println!("INFO section: {:#?}", cmd.section);
-
     let mut infos: Vec<String> = Vec::new();
     match cmd.section {
         Section::Custom(section) => {
