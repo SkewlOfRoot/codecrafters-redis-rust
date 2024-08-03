@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::io::Read;
 use std::{
@@ -75,6 +76,14 @@ fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
                     let message = proto_elements.get(4).expect("Could not get ECHO message.");
                     Ok(Command::Echo(EchoCommand::new(message)))
                 }
+                "INFO" => {
+                    let section = proto_elements.get(4);
+                    let section = match section {
+                        Some(s) => Section::Custom(s.to_string()),
+                        None => Section::All,
+                    };
+                    Ok(Command::Info(InfoCommand::new(section)))
+                }
                 "SET" => {
                     let key = proto_elements.get(4).expect("Could not get SET key.");
                     let value = proto_elements.get(6).expect("Could not get SET value.");
@@ -104,6 +113,21 @@ struct EchoCommand {
     message: String,
 }
 
+struct InfoCommand {
+    section: Section,
+}
+
+enum Section {
+    Custom(String),
+    All,
+}
+
+impl InfoCommand {
+    fn new(section: Section) -> Self {
+        InfoCommand { section }
+    }
+}
+
 struct SetCommand {
     key: String,
     value: String,
@@ -117,6 +141,7 @@ struct GetCommand {
 enum Command {
     Ping,
     Echo(EchoCommand),
+    Info(InfoCommand),
     Set(SetCommand),
     Get(GetCommand),
 }
@@ -186,6 +211,7 @@ impl CommandHandler {
         match command {
             Command::Ping => ping(session),
             Command::Echo(cmd) => echo(session, cmd),
+            Command::Info(cmd) => info(session, cmd),
             Command::Set(cmd) => set(session, cmd),
             Command::Get(cmd) => get(session, cmd),
         }
@@ -199,6 +225,16 @@ fn ping(session: &Session) {
 fn echo(session: &Session, cmd: EchoCommand) {
     let res = format!("${}\r\n{}\r\n", cmd.message.len(), cmd.message);
     write_response(&session.stream, &res);
+}
+
+fn info(session: &Session, cmd: InfoCommand) {
+    let values: Vec<&str> = vec!["role:master", "connected_slaves:0"];
+    let res = values
+        .iter()
+        .map(|x| format!("${}\r\n{}", x.len(), x))
+        .collect_vec()
+        .join("\r\n");
+    write_response(&session.stream, res.as_str());
 }
 
 fn set(session: &mut Session, cmd: SetCommand) {
