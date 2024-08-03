@@ -9,8 +9,20 @@ use threadpool::ThreadPool;
 
 mod threadpool;
 
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(short, long)]
+    port: Option<i16>,
+}
+
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+    let cli = Cli::parse();
+
+    let port: i16 = cli.port.unwrap_or(6379);
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
     let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
