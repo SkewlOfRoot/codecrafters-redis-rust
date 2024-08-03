@@ -117,6 +117,7 @@ struct InfoCommand {
     section: Section,
 }
 
+#[derive(Debug)]
 enum Section {
     Custom(String),
     All,
@@ -228,13 +229,33 @@ fn echo(session: &Session, cmd: EchoCommand) {
 }
 
 fn info(session: &Session, cmd: InfoCommand) {
-    let values: Vec<&str> = vec!["role:master", "connected_slaves:0"];
-    let res = values
+    println!("INFO section: {:#?}", cmd.section);
+
+    let mut infos: Vec<String> = Vec::new();
+    match cmd.section {
+        Section::Custom(section) => {
+            if section == "replication" {
+                infos.push(String::from("# Replication"));
+                infos.extend(replication_info());
+            }
+        }
+        Section::All => {
+            infos.extend(replication_info());
+        }
+    }
+
+    let res = infos
         .iter()
         .map(|x| format!("${}\r\n{}", x.len(), x))
         .collect_vec()
         .join("\r\n");
+
     write_response(&session.stream, res.as_str());
+}
+
+fn replication_info() -> Vec<String> {
+    let values: Vec<String> = vec!["role:master".to_string(), "connected_slaves:0".to_string()];
+    values
 }
 
 fn set(session: &mut Session, cmd: SetCommand) {
