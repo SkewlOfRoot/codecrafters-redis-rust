@@ -1,5 +1,4 @@
 use chrono::{DateTime, Duration, Utc};
-use itertools::Itertools;
 use rand::Rng;
 use std::collections::HashMap;
 use std::fmt::Write as fmtWrite;
@@ -310,11 +309,6 @@ fn info(session: &Session, cmd: InfoCommand) {
 
     let res = infos.join("\r\n");
     let res = format!("${}\r\n{}\r\n", res.len(), res);
-    // let res = infos
-    //     .iter()
-    //     .map(|x| format!("${}\r\n{}", x.len(), x))
-    //     .collect_vec()
-    //     .join("\r\n");
 
     write_response(&session.stream, res.as_str());
 }
