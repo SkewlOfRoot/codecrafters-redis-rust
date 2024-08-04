@@ -17,6 +17,7 @@ use clap::Parser;
 struct Cli {
     #[arg(short, long)]
     port: Option<i16>,
+    replicaof: Option<String>,
 }
 
 fn main() {
@@ -25,10 +26,15 @@ fn main() {
     let port: i16 = cli.port.unwrap_or(6379);
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
     let pool = ThreadPool::new(4);
+    let role = match cli.replicaof {
+        Some(_) => "slave",
+        None => "master",
+    };
+    let server_info = ServerInfo::new(role);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        let session = Session::new(stream);
+        let session = Session::new(server_info.clone(), stream);
         pool.execute(|| handle_connection(session));
     }
 }
@@ -191,14 +197,37 @@ impl CacheValue {
     }
 }
 
+#[derive(Clone)]
+struct ServerInfo {
+    role: String,
+}
+
+impl ServerInfo {
+    fn new(role: &str) -> Self {
+        ServerInfo {
+            role: role.to_string(),
+        }
+    }
+
+    fn replication_info(&self) -> Vec<String> {
+        let values: Vec<String> = vec![
+            format!("role:{}", self.role).to_string(),
+            "connected_slaves:0".to_string(),
+        ];
+        values
+    }
+}
+
 struct Session {
+    server_info: ServerInfo,
     stream: TcpStream,
     storage: HashMap<String, CacheValue>,
 }
 
 impl Session {
-    fn new(stream: TcpStream) -> Self {
+    fn new(server_info: ServerInfo, stream: TcpStream) -> Self {
         Session {
+            server_info,
             stream,
             storage: HashMap::new(),
         }
@@ -233,11 +262,11 @@ fn info(session: &Session, cmd: InfoCommand) {
     match cmd.section {
         Section::Custom(section) => {
             if section == "replication" {
-                infos.extend(replication_info());
+                infos.extend(session.server_info.replication_info());
             }
         }
         Section::All => {
-            infos.extend(replication_info());
+            infos.extend(session.server_info.replication_info());
         }
     }
 
@@ -248,11 +277,6 @@ fn info(session: &Session, cmd: InfoCommand) {
         .join("\r\n");
 
     write_response(&session.stream, res.as_str());
-}
-
-fn replication_info() -> Vec<String> {
-    let values: Vec<String> = vec!["role:master".to_string(), "connected_slaves:0".to_string()];
-    values
 }
 
 fn set(session: &mut Session, cmd: SetCommand) {
