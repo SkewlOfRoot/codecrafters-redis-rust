@@ -1,13 +1,14 @@
 use chrono::{DateTime, Duration, Utc};
 use itertools::Itertools;
+use rand::Rng;
 use std::collections::HashMap;
+use std::fmt::Write as fmtWrite;
 use std::io::Read;
 use std::{
     io::Write,
     net::{TcpListener, TcpStream},
 };
 use threadpool::ThreadPool;
-
 mod threadpool;
 
 use clap::Parser;
@@ -201,21 +202,57 @@ impl CacheValue {
 #[derive(Clone)]
 struct ServerInfo {
     role: String,
+    master_info: Option<MasterServerInfo>,
+}
+
+#[derive(Clone)]
+struct MasterServerInfo {
+    replid: String,
+    repl_offset: i32,
 }
 
 impl ServerInfo {
     fn new(role: &str) -> Self {
+        let master_info = match role {
+            "master" => Some(MasterServerInfo::new(generate_server_id().as_str(), 0)),
+            "slave" => None,
+            _ => None,
+        };
+
         ServerInfo {
             role: role.to_string(),
+            master_info,
         }
     }
 
     fn replication_info(&self) -> Vec<String> {
-        let values: Vec<String> = vec![
-            format!("role:{}", self.role).to_string(),
-            "connected_slaves:0".to_string(),
-        ];
+        let mut values: Vec<String> = vec![format!("role:{}", self.role).to_string()];
+        if self.master_info.is_some() {
+            let master_info = self.master_info.as_ref().unwrap();
+            values.push(format!("master_replid:{}", master_info.replid));
+            values.push(format!("master_repl_offset:{}", master_info.repl_offset));
+        }
         values
+    }
+}
+
+fn generate_server_id() -> String {
+    let mut rng = rand::thread_rng();
+    let mut bytes = [0u8; 20];
+    rng.fill(&mut bytes);
+    bytes.iter().fold(String::new(), |mut output, b| {
+        let _ = write!(output, "{b:02X}");
+        output
+    })
+}
+
+impl MasterServerInfo {
+    fn new(replid: &str, repl_offset: i32) -> Self {
+        println!("Server ID: {}", replid);
+        MasterServerInfo {
+            replid: replid.to_string(),
+            repl_offset,
+        }
     }
 }
 
