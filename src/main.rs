@@ -17,6 +17,7 @@ use clap::Parser;
 struct Cli {
     #[arg(short, long)]
     port: Option<i16>,
+    #[arg(short, long)]
     replicaof: Option<String>,
 }
 
