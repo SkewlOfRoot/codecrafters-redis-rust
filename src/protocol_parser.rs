@@ -1,7 +1,7 @@
 use super::commands::{Command, EchoCommand, GetCommand, InfoCommand, Section, SetCommand};
 
 pub fn parse_protocol(protocol_str: &str) -> Result<Command, &'static str> {
-    println!("Incomming request string: {:#?}", protocol_str);
+    println!("REQUEST: {:#?}", protocol_str);
     let proto_elements: Vec<&str> = protocol_str.split("\r\n").collect();
     match proto_elements.get(2) {
         Some(val) => {
