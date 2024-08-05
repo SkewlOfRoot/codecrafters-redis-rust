@@ -25,6 +25,8 @@ impl CacheValue {
 
 #[derive(Clone)]
 pub struct ServerInfo {
+    addr: String,
+    master_addr: Option<String>,
     role: String,
     master_info: Option<MasterServerInfo>,
 }
@@ -36,16 +38,22 @@ struct MasterServerInfo {
 }
 
 impl ServerInfo {
-    pub fn new(role: &str) -> Self {
-        let master_info = match role {
-            "master" => Some(MasterServerInfo::new(generate_server_id().as_str(), 0)),
-            "slave" => None,
-            _ => None,
-        };
-
+    pub fn new_master(addr: &str) -> Self {
+        let master_info = Some(MasterServerInfo::new(generate_server_id().as_str(), 0));
         ServerInfo {
-            role: role.to_string(),
+            addr: addr.to_string(),
+            master_addr: None,
+            role: "master".to_string(),
             master_info,
+        }
+    }
+
+    pub fn new_slave(addr: &str, master_addr: &str) -> Self {
+        ServerInfo {
+            addr: addr.to_string(),
+            master_addr: Some(master_addr.to_string()),
+            role: "slave".to_string(),
+            master_info: None,
         }
     }
 
@@ -72,7 +80,6 @@ fn generate_server_id() -> String {
 
 impl MasterServerInfo {
     fn new(replid: &str, repl_offset: i32) -> Self {
-        println!("Server ID: {}", replid);
         MasterServerInfo {
             replid: replid.to_string(),
             repl_offset,

@@ -7,8 +7,8 @@ mod threadpool;
 use clap::Parser;
 use command_handling::CommandHandler;
 use server::{ServerInfo, Session};
-use std::io::Read;
-use std::net::TcpListener;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
 use threadpool::ThreadPool;
 
 #[derive(Parser)]
@@ -24,19 +24,28 @@ fn main() {
     let cli = Cli::parse();
 
     let port: i16 = cli.port.unwrap_or(6379);
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).unwrap();
+    let addr = format!("127.0.0.1:{}", port);
+    let listener = TcpListener::bind(&addr).unwrap();
     let pool = ThreadPool::new(4);
-    let role = match cli.replicaof {
-        Some(_) => "slave",
-        None => "master",
+    let server_info = match cli.replicaof {
+        Some(master_addr) => {
+            let master_addr = master_addr.replace(' ', ":");
+            master_handshake(&master_addr);
+            ServerInfo::new_slave(&addr, &master_addr)
+        }
+        None => ServerInfo::new_master(&addr),
     };
-    let server_info = ServerInfo::new(role);
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         let session = Session::new(server_info.clone(), stream);
         pool.execute(|| handle_connection(session));
     }
+}
+
+fn master_handshake(master_addr: &str) {
+    let mut conn = TcpStream::connect(master_addr).unwrap();
+    conn.write_all("*1\r\n$4\r\nping\r\n".as_bytes()).unwrap();
 }
 
 fn handle_connection(mut session: Session) {
