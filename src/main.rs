@@ -1,15 +1,15 @@
+mod command_handling;
+mod commands;
+mod protocol_parser;
+mod server;
+mod threadpool;
+
 use clap::Parser;
 use command_handling::CommandHandler;
 use server::{ServerInfo, Session};
 use std::io::Read;
 use std::net::TcpListener;
 use threadpool::ThreadPool;
-
-pub mod command_handling;
-pub mod commands;
-pub mod protocol_parser;
-pub mod server;
-mod threadpool;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
