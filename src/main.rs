@@ -51,6 +51,7 @@ fn master_handshake(master_addr: &str, slave_port: i16) {
     let ping = helpers::RespHelper::to_resp_array(vec!["PING"]);
     stream.write_all(ping.as_bytes()).unwrap();
     stream.flush().unwrap();
+    let _ = stream.read(&mut [0; 128]);
 
     // Send the first REPLCONF command to master.
     let replconf1 = helpers::RespHelper::to_resp_array(vec![
@@ -60,11 +61,13 @@ fn master_handshake(master_addr: &str, slave_port: i16) {
     ]);
     stream.write_all(replconf1.as_bytes()).unwrap();
     stream.flush().unwrap();
+    let _ = stream.read(&mut [0; 128]);
 
     // Send the second REPLCONF command to master.
     let replconf2 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "capa", "psync2"]);
     stream.write_all(replconf2.as_bytes()).unwrap();
     stream.flush().unwrap();
+    let _ = stream.read(&mut [0; 128]);
 }
 
 fn handle_connection(mut session: Session) {
