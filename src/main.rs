@@ -48,26 +48,51 @@ fn master_handshake(master_addr: &str, slave_port: i16) {
     let mut stream = TcpStream::connect(master_addr).unwrap();
 
     // Send the PING command to master.
+    send_ping_command(&mut stream);
+
+    // Send the first REPLCONF command to master.
+    let slave_port = slave_port.to_string();
+    send_replconf_command(vec!["listening-port", &slave_port], &mut stream);
+
+    // Send the second REPLCONF command to master.
+    send_replconf_command(vec!["capa", "psync2"], &mut stream);
+}
+
+fn send_ping_command(stream: &mut TcpStream) {
     let ping = helpers::RespHelper::to_resp_array(vec!["PING"]);
     stream.write_all(ping.as_bytes()).unwrap();
     stream.flush().unwrap();
-    let _ = stream.read(&mut [0; 128]);
 
-    // Send the first REPLCONF command to master.
-    let replconf1 = helpers::RespHelper::to_resp_array(vec![
-        "REPLCONF",
-        "listening-port",
-        slave_port.to_string().as_str(),
-    ]);
+    let read_buff = &mut [0; 128];
+    let bytes_read = stream.read(read_buff).unwrap();
+
+    match String::from_utf8(read_buff[..bytes_read].to_vec()) {
+        Ok(r) => {
+            if r != "+PONG\r\n" {
+                panic!("Unexpected PING response from master: {}", r);
+            }
+        }
+        Err(_) => panic!("Received non-UTF8 data."),
+    }
+}
+
+fn send_replconf_command(mut values: Vec<&str>, stream: &mut TcpStream) {
+    values.insert(0, "REPLCONF");
+    let replconf1 = helpers::RespHelper::to_resp_array(values);
     stream.write_all(replconf1.as_bytes()).unwrap();
     stream.flush().unwrap();
-    let _ = stream.read(&mut [0; 128]);
 
-    // Send the second REPLCONF command to master.
-    let replconf2 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "capa", "psync2"]);
-    stream.write_all(replconf2.as_bytes()).unwrap();
-    stream.flush().unwrap();
-    let _ = stream.read(&mut [0; 128]);
+    let read_buff = &mut [0; 128];
+    let bytes_read = stream.read(read_buff).unwrap();
+
+    match String::from_utf8(read_buff[..bytes_read].to_vec()) {
+        Ok(r) => {
+            if r != "+OK\r\n" {
+                panic!("Unexpected REPLCONF response from master: {}", r);
+            }
+        }
+        Err(_) => panic!("Received non-UTF8 data."),
+    }
 }
 
 fn handle_connection(mut session: Session) {
