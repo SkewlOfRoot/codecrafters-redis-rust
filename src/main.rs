@@ -1,5 +1,6 @@
 mod command_handling;
 mod commands;
+mod helpers;
 mod protocol_parser;
 mod server;
 mod threadpool;
@@ -27,13 +28,13 @@ fn main() {
     let addr = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(&addr).unwrap();
     let pool = ThreadPool::new(4);
-    let server_info = match cli.replicaof {
-        Some(master_addr) => {
-            let master_addr = master_addr.replace(' ', ":");
-            master_handshake(&master_addr);
-            ServerInfo::new_slave(&addr, &master_addr)
-        }
-        None => ServerInfo::new_master(&addr),
+
+    let server_info = if let Some(master_addr) = cli.replicaof {
+        let master_addr = master_addr.replace(' ', ":");
+        master_handshake(&master_addr);
+        ServerInfo::new_slave(&addr, &master_addr)
+    } else {
+        ServerInfo::new_master(&addr)
     };
 
     for stream in listener.incoming() {
@@ -44,8 +45,13 @@ fn main() {
 }
 
 fn master_handshake(master_addr: &str) {
-    let mut conn = TcpStream::connect(master_addr).unwrap();
-    conn.write_all("*1\r\n$4\r\nping\r\n".as_bytes()).unwrap();
+    let mut stream = TcpStream::connect(master_addr).unwrap();
+    let ping = helpers::RespHelper::to_resp_array(vec!["PING"]);
+    stream.write_all(ping.as_bytes()).unwrap();
+    let replconf1 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "listening-port", "1234"]);
+    stream.write_all(replconf1.as_bytes()).unwrap();
+    let replconf2 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "capa", "psync2"]);
+    stream.write_all(replconf2.as_bytes()).unwrap();
 }
 
 fn handle_connection(mut session: Session) {
