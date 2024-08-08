@@ -31,7 +31,7 @@ fn main() {
 
     let server_info = if let Some(master_addr) = cli.replicaof {
         let master_addr = master_addr.replace(' ', ":");
-        master_handshake(&master_addr);
+        master_handshake(&master_addr, port);
         ServerInfo::new_slave(&addr, &master_addr)
     } else {
         ServerInfo::new_master(&addr)
@@ -44,14 +44,27 @@ fn main() {
     }
 }
 
-fn master_handshake(master_addr: &str) {
+fn master_handshake(master_addr: &str, slave_port: i16) {
     let mut stream = TcpStream::connect(master_addr).unwrap();
+
+    // Send the PING command to master.
     let ping = helpers::RespHelper::to_resp_array(vec!["PING"]);
     stream.write_all(ping.as_bytes()).unwrap();
-    let replconf1 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "listening-port", "1234"]);
+    stream.flush().unwrap();
+
+    // Send the first REPLCONF command to master.
+    let replconf1 = helpers::RespHelper::to_resp_array(vec![
+        "REPLCONF",
+        "listening-port",
+        slave_port.to_string().as_str(),
+    ]);
     stream.write_all(replconf1.as_bytes()).unwrap();
+    stream.flush().unwrap();
+
+    // Send the second REPLCONF command to master.
     let replconf2 = helpers::RespHelper::to_resp_array(vec!["REPLCONF", "capa", "psync2"]);
     stream.write_all(replconf2.as_bytes()).unwrap();
+    stream.flush().unwrap();
 }
 
 fn handle_connection(mut session: Session) {
